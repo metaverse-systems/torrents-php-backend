@@ -9,14 +9,7 @@
             "email": "tim@metaverse.systems"
         }
     ],
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../transmission-api"
-        }
-    ],
     "require": {
-        "martial/transmission-api": "dev-master"
     },
     "autoload": {
         "psr-4": {

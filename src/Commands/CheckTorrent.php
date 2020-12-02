@@ -65,14 +65,8 @@ class CheckTorrent extends Command
             }
             else
             {
-print_r($torrent->toArray());
                 $torrent->hash_string = $transmission->add($torrent->magnetURI);
-                try
-                {
-                    $torrent->save();
-                } catch(JsonRPC\Exception\ConnectionFailureException | \ErrorException $e)
-                {
-                }
+                $torrent->save();
             }
         }
     }

@@ -2,87 +2,43 @@
 
 namespace MetaverseSystems\TorrentPHPBackend;
 
-use Martial\Transmission\API\Argument\Torrent\Add;
-use Martial\Transmission\API\Argument\Torrent\Get;
-use Martial\Transmission\API\TorrentIdList;
-
 class TransmissionTorrent
 {
     private $rpc_url;
-    private $httpClient;
-    private $api;
-    private $sessionId = "";
+    private $headers;
 
     public function __construct($url)
     {
         $this->rpc_url = $url;
-        $this->httpClient = new \GuzzleHttp\Client(['base_uri' => $this->rpc_url]);
-        $this->api = new \Martial\Transmission\API\RpcClient($this->httpClient, "", "");
 
-        try
+        @file_get_contents($this->rpc_url);
+        foreach($http_response_header as $line)
         {
-            $this->api->sessionGet($this->sessionId);
-        }
-        catch (\Martial\Transmission\API\CSRFException $e)
-        {
-            // The session has been reinitialized. Fetch the new session ID with the method getSessionId().
-            $this->sessionId = $e->getSessionId();
-        }
-        catch (\Martial\Transmission\API\TransmissionException $e)
-        {
-            // The API returned an error, retrieve the reason with the method getResult().
-            throw new \Exception('       API error: ' . $e->getResult().". When accessing $url.");
+            $header = explode(":", $line);
+            if(count($header) < 2) continue;
+            if($header[0] == "X-Transmission-Session-Id")
+            {
+                $this->headers = "X-Transmission-Session-Id: ".$header[1]."\r\nContent-type: application/json";
+            }
         }
     }
 
     public function add($torrent)
     {
-        try
-        {
-            $result = $this->api->torrentAdd($this->sessionId, [
-                \Martial\Transmission\API\Argument\Torrent\Add::FILENAME => $torrent
-            ]);
-
-            return $result['hashString'];
-        }
-        catch (\Martial\Transmission\API\DuplicateTorrentException $e)
-        {
-            // This torrent is already in your download queue.
-        }
-        catch (\Martial\Transmission\API\MissingArgumentException $e)
-        {
-            // Some required arguments are missing.
-        }
-        catch (\Martial\Transmission\API\CSRFException $e)
-        {
-             // The session has been reinitialized. Fetch the new session ID with the method getSessionId().
-        }
-        catch (\Martial\Transmission\API\TransmissionException $e)
-        {
-            // The API returned an error, retrieve the reason with the method getResult().
-            throw new \Exception('API error: ' . $e->getResult());
-        }
+        $response = $this->execute("torrent-add", array("filename"=>$torrent));
+        foreach(json_decode($response)->arguments as $k=>$v) return $v->hashString;
     }
 
     public function check($hashString)
     {
-        try
-        {
-            $torrentList = $this->api->torrentGet($this->sessionId,
-                new TorrentIdList([ ]), [Get::ID, Get::NAME, Get::STATUS, Get::MAGNET_LINK, Get::HASH_STRING, Get::TORRENT_FILE ]);
-        }
-        catch (\Martial\Transmission\API\TransmissionException $e)
-        {
-            // The API returned an error, retrieve the reason with the method getResult().
-            die('API error: ' . $e->getResult());
-        }
-
+        $response = $this->execute("torrent-get", array("fields"=>["id", "hashString", "status", "magnetLink", "torrentFile"]));
+        $torrentList = json_decode($response)->arguments->torrents;
         foreach($torrentList as $torrent)
         {
-            if($hashString == $torrent['hashString'])
+            if($hashString == $torrent->hashString)
             {
                 // 6 == Complete
-                if($torrent['status'] == 6) return true;
+                if($torrent->status == 6) return true;
             }
         }
         return false;
@@ -90,23 +46,36 @@ class TransmissionTorrent
 
     public function remove($hashString)
     {
-        try
-        {
-            $torrentList = $this->api->torrentGet($this->sessionId,
-                new TorrentIdList([ ]), [Get::ID, Get::NAME, Get::STATUS, Get::MAGNET_LINK, Get::HASH_STRING, Get::TORRENT_FILE ]);
-        }
-        catch (\Martial\Transmission\API\TransmissionException $e)
-        {
-            // The API returned an error, retrieve the reason with the method getResult().
-            die('API error: ' . $e->getResult());
-        }
+        $response = $this->execute("torrent-get", array("fields"=>["id", "hashString", "status", "magnetLink", "torrentFile"]));
+        $torrentList = json_decode($response)->arguments->torrents;
 
         foreach($torrentList as $torrent)
         {
-            if($hashString == $torrent['hashString'])
+            if($hashString == $torrent->hashString)
             {
-                $this->api->torrentRemove($this->sessionId, new TorrentIdList([ $torrent['id'] ]), false);
+                $this->execute("torrent-remove", array("fields"=>[$torrent->id]));
             }
         }
+    }
+
+    private function execute($method, $args)
+    {
+        $req = new \stdClass;
+        $req->id = rand();
+        $req->jsonrpc = "2.0";
+        $req->method = $method;
+        $req->arguments = $args;
+
+        $opts = array('http' =>
+            array(
+                'method'  => 'POST',
+                'header'  => $this->headers,
+                'content' => json_encode($req)
+            )
+        );
+
+        $context = stream_context_create($opts);
+        $response = file_get_contents($this->rpc_url, false, $context);
+        return $response;
     }
 }

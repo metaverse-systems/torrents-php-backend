@@ -14,7 +14,7 @@ class TorrentController extends \App\Http\Controllers\Controller
      */
     public function index()
     {
-        $torrents = Torrent::get();
+        $torrents = Torrent::orderBy('created_at', 'DESC')->get();
         return $torrents;
     }
 
@@ -53,16 +53,7 @@ class TorrentController extends \App\Http\Controllers\Controller
             }
         }
 
-        try
-        { 
-            @$t->save();
-        }
-        catch(\JsonRPC\Exception\ConnectionFailureException $e)
-        {
-        }
-        catch(\ErrorException $e)
-        {
-        }
+        $t->save();
 
         \Artisan::call('torrent:check');
         return response()->json([], 201);

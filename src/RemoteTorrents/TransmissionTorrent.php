@@ -1,15 +1,17 @@
 <?php
 
-namespace MetaverseSystems\TorrentPHPBackend;
+namespace MetaverseSystems\TorrentPHPBackend\RemoteTorrents;
+use MetaverseSystems\TorrentPHPBackend\RemoteTorrent;
 
-class TransmissionTorrent
+class TransmissionTorrent extends RemoteTorrent
 {
+    public static $type = "Transmission";
     private $rpc_url;
     private $headers;
 
-    public function __construct($url)
+    public function __construct($address)
     {
-        $this->rpc_url = $url;
+        $this->rpc_url = "http://$address/transmission/rpc";
 
         @file_get_contents($this->rpc_url);
         foreach($http_response_header as $line)
@@ -53,7 +55,7 @@ class TransmissionTorrent
         {
             if($hashString == $torrent->hashString)
             {
-                $this->execute("torrent-remove", array("fields"=>[$torrent->id]));
+                $this->execute("torrent-remove", array("ids"=>[$torrent->id]));
             }
         }
     }
